@@ -1,0 +1,88 @@
+# Rendering Configuration
+# BlenderProc rendering with segmentation masks
+
+# Camera positions and orientations
+# Each camera generates one render per sample
+cameras:
+  - position: [0.0, 0.0, 0.3]      # [x, y, z] in meters (top-down view)
+    rotation: [0.0, 0.0, 0.0]      # Euler angles in radians [x, y, z]
+
+  # Uncomment to add more camera angles:
+  # - position: [0.05, 0.05, 0.25]  # Slight angle
+  #   rotation: [0.1, 0.0, 0.0]
+
+# Lighting configuration
+lighting:
+  # Main sun lamp (directional light)
+  sun:
+    energy: 2.0                    # Light intensity
+    location: [0, 0, 1.0]          # [x, y, z] in meters
+    rotation: [0, 0, 0]            # Euler angles in radians
+
+  # Fill lights (point lights for soft fill)
+  fill_lights:
+    - location: [0.3, 0.3, 0.5]    # Top-right fill
+      energy: 0.6
+
+    - location: [-0.3, 0.3, 0.5]   # Top-left fill
+      energy: 0.6
+
+    - location: [0.3, -0.3, 0.5]   # Bottom-right fill
+      energy: 0.6
+
+    - location: [-0.3, -0.3, 0.5]  # Bottom-left fill
+      energy: 0.6
+
+# Background settings
+background:
+  color: [0.8, 0.8, 0.8]           # RGB background color (light grey)
+  # Future: HDRI environment maps for realistic reflections
+
+# Rendering resolution
+# Can be overridden by pipeline config for multi-resolution generation
+resolution: 2048                   # Width and height in pixels (square images)
+
+# Render quality settings
+render:
+  samples: 128                     # Ray tracing samples (higher = better quality, slower)
+  denoise: true                    # Enable denoising for cleaner images
+  use_gpu: true                    # Use GPU if available (much faster)
+
+# Segmentation settings
+segmentation:
+  # Category mapping:
+  #   0 = Background (default)
+  #   1 = Metal/Probable (solder joints, pins, pads, exposed copper)
+  #   2 = Non-metal (plastic/ceramic component bodies, soldermask)
+
+  # Segmentation maps to generate
+  maps:
+    - category_id                  # Semantic segmentation (metal vs non-metal)
+    - material                     # Per-material segmentation
+    - instance                     # Instance segmentation (separate objects)
+    - name                         # Per-object segmentation
+
+  # Material detection for category assignment
+  material_detection:
+    # Keywords in material names that indicate metal
+    metal_keywords:
+      - solder
+      - copper
+      - pad
+      - metal
+      - tin
+
+    # Mat4cad BSDF properties
+    # mat_base: 0 = plastic/ceramic, 2 = metal
+    use_mat4cad_detection: true
+
+# Depth rendering
+depth:
+  enabled: true                    # Enable depth map rendering
+  antialiasing: false              # Disable antialiasing for precise depth values
+
+# Output format
+output:
+  format: hdf5                     # hdf5 (BlenderProc default, efficient)
+  compression: gzip                # Compression for HDF5 files
+  compression_level: 4             # Compression level (0-9, higher = smaller but slower)

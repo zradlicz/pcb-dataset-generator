@@ -1,0 +1,93 @@
+# Pipeline Configuration
+# High-level orchestration for dataset generation
+
+# Dataset generation settings
+dataset:
+  num_samples: 1000              # Total number of samples to generate
+  output_format: hdf5            # hdf5, coco, or both
+  validate_outputs: true         # Validate each sample after generation
+
+# Multi-resolution rendering
+# Generate multiple resolutions per board (useful for multi-scale training)
+resolutions:
+  - 512                          # Low resolution (fast generation, small files)
+  - 1024                         # Medium resolution
+  - 2048                         # High resolution (slow, large files)
+
+# Random seed management for reproducibility
+seed:
+  base: 42                       # Base seed for reproducibility
+  auto_increment: true           # Each sample gets base_seed + sample_id
+  # If false, all samples use the same seed (useful for debugging)
+
+# File paths (relative to data/ directory)
+paths:
+  boards: boards/                # Generated .kicad_pcb files
+  pcb3d: pcb3d/                  # Exported .pcb3d files
+  renders: renders/              # Blender .blend files
+  output: output/                # Final HDF5/COCO outputs
+  logs: logs/                    # Execution logs
+
+# Intermediate file cleanup
+# Save disk space by removing intermediate files after successful generation
+cleanup:
+  keep_boards: false             # Keep .kicad_pcb files
+  keep_pcb3d: false              # Keep .pcb3d files
+  keep_blend: false              # Keep .blend files
+  keep_on_failure: true          # Keep all files if generation fails (for debugging)
+
+# Logging configuration
+logging:
+  level: INFO                    # DEBUG, INFO, WARNING, ERROR
+  format: detailed               # simple, detailed, json
+  log_to_file: true              # Write logs to files
+  log_to_console: true           # Print logs to console
+
+# Performance settings
+performance:
+  parallel_renders: false        # Render multiple resolutions in parallel (requires more memory)
+  blender_threads: 0             # Number of Blender render threads (0 = auto)
+  kicad_timeout: 300             # Timeout for KiCad operations (seconds)
+  blender_timeout: 1800          # Timeout for Blender operations (seconds)
+
+# Error handling
+error_handling:
+  retry_on_failure: true         # Retry failed samples
+  max_retries: 3                 # Maximum retry attempts
+  continue_on_error: true        # Continue to next sample if one fails
+  save_error_logs: true          # Save detailed error logs
+
+# Validation settings
+validation:
+  check_file_sizes: true         # Ensure output files are non-zero size
+  check_segmentation: true       # Validate segmentation maps exist
+  min_output_size_mb: 1          # Minimum expected output size (MB)
+  check_component_count: true    # Verify expected number of components
+
+# Dataset splitting (for train/val/test)
+# Note: This is metadata only - actual splitting done in post-processing
+dataset_split:
+  train: 0.7                     # 70% training
+  val: 0.2                       # 20% validation
+  test: 0.1                      # 10% testing
+  shuffle: true                  # Shuffle before splitting
+  split_seed: 42                 # Seed for shuffle reproducibility
+
+# HPC-specific settings
+hpc:
+  batch_mode: false              # Enable batch mode for HPC (suppresses interactive prompts)
+  slurm_array_task: false        # Running as SLURM array task
+  checkpoint_interval: 100       # Save checkpoint every N samples
+  enable_profiling: false        # Enable performance profiling
+
+# Future features (not yet implemented)
+future:
+  soldermask_colors:             # Randomize soldermask colors
+    - green
+    - blue
+    - red
+    - black
+  enable_defects: false          # Add realistic PCB defects
+  background_randomization: false # Random backgrounds (desk, workspace, etc.)
+  camera_randomization: false    # Slight random variations in camera angle
+  lighting_randomization: false  # Random lighting variations

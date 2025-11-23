@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+.gitmodules
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+
+# Data directories (mounted at runtime)
+data/
+*.kicad_pcb
+*.kicad_sch
+*.kicad_pro
+*.pcb3d
+*.blend
+*.blend1
+*.hdf5
+*.h5
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Documentation
+*.md
+!README.md
+!PRODUCTION_PLAN.md
+docs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

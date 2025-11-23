@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  pcb-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pcb-dataset:latest
+    container_name: pcb-dataset-generator
+
+    # Mount data directory
+    volumes:
+      - ./data:/data
+      - ./config:/app/config:ro  # Read-only config
+
+    # Environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+
+    # Resource limits (adjust based on your system)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 8G
+
+    # Default command: generate single sample
+    command: >
+      python3 /app/scripts/generate_single.py
+        --sample-id 0
+        --output-dir /data/output
+        --config-dir /app/config
+
+  # Service for batch generation
+  pcb-generator-batch:
+    extends: pcb-generator
+    command: >
+      python3 /app/scripts/generate_batch.py
+        --num-samples 10
+        --output-dir /data/output
+        --config-dir /app/config
+
+  # Service for running tests
+  pcb-generator-test:
+    extends: pcb-generator
+    command: pytest /app/tests -v
+    volumes:
+      - ./data:/data
+      - ./config:/app/config:ro
+      - ./tests:/app/tests:ro

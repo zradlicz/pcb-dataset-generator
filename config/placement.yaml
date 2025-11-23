@@ -1,0 +1,59 @@
+# Component Placement Configuration
+# Perlin noise-based organic clustering for realistic PCB layouts
+
+# Perlin noise parameters
+perlin:
+  scale: 30.0              # Noise scale factor (larger = smoother transitions)
+  octaves: 4               # Number of noise detail levels
+  persistence: 0.5         # Amplitude decay per octave (0-1)
+  lacunarity: 2.0          # Frequency increase per octave
+  seed: null               # Random seed (null = random, or specify integer for reproducibility)
+
+# Vignette effect (density falloff from board edges)
+vignette:
+  enabled: true            # Enable edge density falloff
+  strength: 0.7            # Falloff strength (0-1, higher = stronger edge falloff)
+
+# Component counts and spacing by size category
+components:
+  small:
+    count: 100             # Number of small components (resistors, capacitors, LEDs)
+    spacing: 2.0           # Minimum spacing between components (mm)
+
+  medium:
+    count: 30              # Number of medium components (8-pin ICs, diodes)
+    spacing: 5.0           # Minimum spacing (mm)
+
+  large:
+    count: 18              # Number of large components (32-pin ICs, connectors)
+    spacing: 8.0           # Minimum spacing (mm)
+
+# Board dimensions
+board:
+  width: 100.0             # Board width (mm)
+  height: 100.0            # Board height (mm)
+
+# Component type distribution (weights)
+# Higher weight = more likely to be selected
+component_types:
+  small:
+    resistor: 40           # 40% resistors
+    capacitor: 35          # 35% capacitors
+    led: 15                # 15% LEDs
+    diode: 10              # 10% diodes
+
+  medium:
+    ic_8pin: 50            # 50% 8-pin ICs
+    ic_16pin: 30           # 30% 16-pin ICs
+    connector_small: 20    # 20% small connectors
+
+  large:
+    ic_32pin: 40           # 40% 32-pin ICs
+    ic_64pin: 20           # 20% 64-pin ICs
+    connector_large: 40    # 40% large connectors
+
+# Rotation settings
+rotation:
+  snap_angle: 90.0         # Snap rotations to multiples of this angle (degrees)
+  allow_45deg: false       # Allow 45-degree rotations (in addition to 90-degree)
+  randomize: true          # Randomize rotation within snap angles
