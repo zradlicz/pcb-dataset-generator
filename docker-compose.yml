@@ -27,6 +27,10 @@ services:
         reservations:
           cpus: '2'
           memory: 8G
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
     # Default command: generate single sample
     command: >

@@ -19,11 +19,28 @@ class BlenderImporter:
     """
 
     def __init__(self):
-        """Initialize importer."""
+        """Initialize importer and register pcb2blender addon."""
         # Add pcb2blender to path
         pcb2blender_path = Path(__file__).parent.parent.parent / "pcb2blender"
         if pcb2blender_path.exists() and str(pcb2blender_path) not in sys.path:
             sys.path.insert(0, str(pcb2blender_path))
+            logger.debug(f"Added pcb2blender to path: {pcb2blender_path}")
+
+        # Register pcb2blender_importer addon (required for Mat4CAD nodes)
+        try:
+            import bpy
+            import pcb2blender_importer
+
+            # Check if already registered
+            if not hasattr(bpy.types, 'ShaderNodeBsdfMat4cad'):
+                pcb2blender_importer.register()
+                logger.info("Registered pcb2blender_importer addon")
+            else:
+                logger.debug("pcb2blender_importer already registered")
+        except ImportError:
+            logger.warning("Could not register pcb2blender addon (not running in Blender)")
+        except Exception as e:
+            logger.warning(f"Failed to register pcb2blender addon: {e}")
 
     def import_pcb3d(self, pcb3d_path: Path, output_blend_path: Path) -> Path:
         """
@@ -49,18 +66,50 @@ class BlenderImporter:
 
         logger.info(f"Importing {pcb3d_path.name} into Blender...")
 
+        # Debug: Print sys.path to verify pcb2blender is there
+        pcb2blender_path = Path(__file__).parent.parent.parent / "pcb2blender"
+        print(f"DEBUG: pcb2blender path: {pcb2blender_path}")
+        print(f"DEBUG: pcb2blender exists: {pcb2blender_path.exists()}")
+        print(f"DEBUG: error_helper exists: {(pcb2blender_path / 'error_helper.py').exists()}")
+        print(f"DEBUG: pcb2blender in sys.path: {str(pcb2blender_path) in sys.path}")
+        print(f"DEBUG: sys.path first 5: {sys.path[:5]}")
+
         try:
             # Import pcb2blender importer
-            from pcb2blender_importer import import_pcb
+            from pcb2blender_importer import importer as pcb_importer
+
+            # Register the operator if not already registered
+            if not hasattr(bpy.types, 'PCB2BLENDER_OT_import_pcb3d'):
+                pcb_importer.register()
+                logger.info("Registered pcb2blender operator")
 
             # Clear existing scene
             bpy.ops.object.select_all(action='SELECT')
             bpy.ops.object.delete()
 
-            # Import the .pcb3d file
-            import_pcb.import_pcb3d(str(pcb3d_path))
+            # Import the .pcb3d file using the operator
+            result = bpy.ops.pcb2blender.import_pcb3d(
+                filepath=str(pcb3d_path),
+                import_components=True,
+                add_solder_joints="SMART",
+                center_boards=True,
+                cut_boards=True,
+                stack_boards=True,
+                merge_materials=True,
+                enhance_materials=True,
+                pcb_material="RASTERIZED",
+                texture_dpi=1016.0
+            )
+
+            if result != {'FINISHED'}:
+                raise RuntimeError(f"Import operator returned: {result}")
 
             logger.info(f"Imported {len(bpy.data.objects)} objects")
+
+            # Pack all external resources (textures) into the blend file
+            # This prevents missing textures when opening the file later
+            bpy.ops.file.pack_all()
+            logger.debug("Packed all external resources")
 
             # Save .blend file
             output_blend_path.parent.mkdir(parents=True, exist_ok=True)

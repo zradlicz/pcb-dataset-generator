@@ -1,4 +1,4 @@
 [submodule "pcb2blender"]
 	path = pcb2blender
-	url = https://github.com/antmicro/pcb2blender.git
+	url = https://github.com/30350n/pcb2blender.git
 	branch = main

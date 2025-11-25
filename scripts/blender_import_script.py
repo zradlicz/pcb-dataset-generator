@@ -9,11 +9,27 @@ This script must be run inside Blender:
 import sys
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+print("=== Blender Import Script Starting ===")
+print(f"Python version: {sys.version}")
+print(f"Script path: {__file__}")
 
-from pcb_dataset.importer import BlenderImporter
-from pcb_dataset.utils.logging import setup_logging
+# Add src to path
+src_path = Path(__file__).parent.parent / "src"
+sys.path.insert(0, str(src_path))
+print(f"Added to path: {src_path}")
+
+# Import modules directly to avoid triggering __init__.py
+try:
+    print("Importing pcb_dataset.importer...")
+    import pcb_dataset.importer as importer_module
+
+    BlenderImporter = importer_module.BlenderImporter
+    print("✓ Imports successful")
+except Exception as e:
+    print(f"✗ Import failed: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
 
 
 def main():
@@ -34,17 +50,25 @@ def main():
     pcb3d_path = Path(script_args[0])
     blend_path = Path(script_args[1])
 
-    # Setup logging
-    setup_logging(level="INFO")
-
     # Import
+    print(f"Starting import of {pcb3d_path} to {blend_path}")
+    print(f"PCB3D exists: {pcb3d_path.exists()}")
+    print(f"Output directory: {blend_path.parent}")
+    print(f"Output directory exists: {blend_path.parent.exists()}")
+
     importer = BlenderImporter()
     try:
         result_path = importer.import_pcb3d(pcb3d_path, blend_path)
+        print(f"Import returned: {result_path}")
+        print(f"Blend file exists: {result_path.exists()}")
+        if result_path.exists():
+            print(f"Blend file size: {result_path.stat().st_size} bytes")
         print(f"Success: {result_path}")
         sys.exit(0)
     except Exception as e:
         print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 

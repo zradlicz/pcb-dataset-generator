@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# IMPORTANT: blenderproc must be imported first!
+import blenderproc as bproc
+
 """
 Standalone BlenderProc rendering script.
 
@@ -13,9 +16,16 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from pcb_dataset.renderer import BProcRenderer, RenderConfig
-from pcb_dataset.utils.config import load_config
-from pcb_dataset.utils.logging import setup_logging
+# Import modules directly to avoid triggering __init__.py imports
+# (which would require 'noise' package in Blender's Python)
+import pcb_dataset.renderer as renderer
+import pcb_dataset.utils.config as config_utils
+import pcb_dataset.utils.logging as logging_utils
+
+BProcRenderer = renderer.BProcRenderer
+RenderConfig = renderer.RenderConfig
+load_config = config_utils.load_config
+setup_logging = logging_utils.setup_logging
 
 
 def main():

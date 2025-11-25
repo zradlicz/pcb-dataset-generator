@@ -30,6 +30,9 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     # Additional Blender dependencies
     libgomp1 \
+    # EGL libraries (needed for skia-python)
+    libegl1 \
+    libgles2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Add KiCad PPA and install KiCad 8.0+
@@ -51,8 +54,15 @@ RUN wget -q https://download.blender.org/release/Blender4.2/blender-${BLENDER_VE
     rm blender-${BLENDER_VERSION}-linux-x64.tar.xz && \
     ln -s ${BLENDER_DIR}/blender /usr/local/bin/blender
 
+# Install Python packages into Blender's Python environment
+# (pcb2blender_importer dependencies: pillow, skia-python)
+RUN ${BLENDER_DIR}/4.2/python/bin/python3.11 -m ensurepip && \
+    ${BLENDER_DIR}/4.2/python/bin/python3.11 -m pip install --upgrade pip && \
+    ${BLENDER_DIR}/4.2/python/bin/python3.11 -m pip install Pillow==11.3.0 skia-python==138.0
+
 # Set up Python environment
-RUN python3 -m pip install --upgrade pip setuptools wheel
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    ln -s /usr/bin/python3 /usr/bin/python
 
 # Install uv for fast dependency management
 RUN pip install uv
@@ -62,6 +72,7 @@ WORKDIR /app
 
 # Copy project files
 COPY pyproject.toml ./
+COPY README.md ./
 COPY src/ ./src/
 COPY config/ ./config/
 COPY scripts/ ./scripts/
@@ -71,11 +82,14 @@ COPY scripts/ ./scripts/
 RUN pip install -e . && \
     pip install blenderproc
 
-# Clone pcb2blender as a git submodule alternative (vendored)
-# In production, this should be a git submodule, but for container we clone directly
-RUN git clone --depth 1 https://github.com/antmicro/pcb2blender.git /app/pcb2blender && \
-    cd /app/pcb2blender && \
-    git submodule update --init --recursive
+# Clone pcb2blender from GitHub (with submodules)
+# Manually fix symlinks that git doesn't create properly in Docker
+RUN git clone --recursive https://github.com/30350n/pcb2blender.git /app/pcb2blender && \
+    rm /app/pcb2blender/pcb2blender_exporter/pcb3d.py && \
+    ln -s ../pcb2blender_importer/pcb3d.py /app/pcb2blender/pcb2blender_exporter/pcb3d.py
+
+# Copy error_helper stub (KiCad normally provides this, but we need it for standalone Blender)
+COPY scripts/error_helper.py /app/pcb2blender/error_helper.py
 
 # Add pcb2blender to Python path
 ENV PYTHONPATH="/app/pcb2blender:${PYTHONPATH}"

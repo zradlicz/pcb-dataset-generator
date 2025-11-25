@@ -111,6 +111,19 @@ class BProcRenderer:
         # Configure rendering
         bproc.camera.set_resolution(self.config.resolution, self.config.resolution)
 
+        # Configure GPU rendering if enabled
+        if self.config.use_gpu:
+            bproc.renderer.set_render_devices(desired_gpu_device_type='OPTIX')
+            bpy.context.scene.cycles.device = 'GPU'
+            logger.info("GPU rendering enabled (OPTIX)")
+
+        # Set render engine to CYCLES and configure samples
+        bproc.renderer.set_max_amount_of_samples(self.config.render_samples)
+        if self.config.denoise:
+            bproc.renderer.enable_normals_output()
+            bpy.context.scene.cycles.use_denoising = True
+            logger.info(f"Denoising enabled with {self.config.render_samples} samples")
+
         # Enable depth rendering
         bproc.renderer.enable_depth_output(activate_antialiasing=False)
 
@@ -145,13 +158,18 @@ class BProcRenderer:
         addon_path = Path(__file__).parent.parent.parent / "pcb2blender"
         if str(addon_path) not in sys.path:
             sys.path.insert(0, str(addon_path))
+            logger.debug(f"Added pcb2blender to path: {addon_path}")
 
         try:
+            # Import only the materials module, not the full addon
+            # This avoids UI registration issues in BlenderProc
             from pcb2blender_importer import materials
             materials.register()
             logger.info("✓ Registered pcb2blender materials")
         except Exception as e:
             logger.warning(f"Could not register pcb2blender materials: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
 
     def _assign_category_ids(self):
         """

@@ -154,12 +154,17 @@ class Pipeline:
                 if not validate_hdf5_file(output_path, min_size_mb=min_size_mb):
                     raise RuntimeError(f"Output validation failed: {output_path}")
 
-            # Step 6: Convert format (if requested)
+            # Step 6: Extract PNG images for visualization
+            logger.info("Step 6: Extracting PNG images...")
+            png_output_dir = self.paths.output_dir / f"{output_path.stem}_images"
+            self.converter.extract_images_with_viz(output_path, png_output_dir)
+
+            # Step 7: Convert format (if requested)
             if self.pipeline_config.output_format in ["coco", "both"]:
-                logger.info("Step 6: Converting to COCO format...")
+                logger.info("Step 7: Converting to COCO format...")
                 self.converter.hdf5_to_coco(output_path, self.paths.output_dir)
 
-            # Step 7: Cleanup intermediate files
+            # Step 8: Cleanup intermediate files
             if not self.pipeline_config.cleanup.get("keep_on_failure", True):
                 self._cleanup(sample_id)
 
@@ -199,8 +204,14 @@ class Pipeline:
 
         result = subprocess.run(cmd, capture_output=True, text=True)
 
+        # Log stdout for debugging
+        if result.stdout:
+            logger.debug(f"Blender import stdout: {result.stdout}")
+
         if result.returncode != 0:
-            logger.error(f"Blender import failed: {result.stderr}")
+            logger.error(f"Blender import failed (returncode={result.returncode})")
+            logger.error(f"stderr: {result.stderr}")
+            logger.error(f"stdout: {result.stdout}")
             raise RuntimeError(f"Blender import failed: {result.stderr}")
 
         logger.info(f"Blender import complete: {blend_path}")
