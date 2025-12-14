@@ -1,14 +1,7 @@
 """
 BlenderProc rendering with material-based segmentation.
 
-Ported from POC: src/bproc_renderer.py
-
-CRITICAL LEARNINGS:
-- Material-based segmentation via Mat4cad BSDF inspection
-- Multi-material object splitting for per-face segmentation
-- Category 1 = metal (solder, pins, pads, copper)
-- Category 2 = non-metal (plastic/ceramic bodies, soldermask)
-- Mat4cad mat_base property: 0=plastic, 2=metal
+Direct port from POC: src/bproc_renderer.py (working version)
 """
 
 from pathlib import Path
@@ -50,30 +43,18 @@ class BProcRenderer:
     """
     BlenderProc renderer with segmentation.
 
-    Ported from POC src/bproc_renderer.py
+    Direct port from POC src/bproc_renderer.py
     """
 
     def __init__(self, config: RenderConfig):
-        """
-        Initialize renderer.
-
-        Args:
-            config: Render configuration
-        """
+        """Initialize renderer."""
         self.config = config
 
     def render(self, blend_path: Path, output_dir: Path) -> Path:
         """
         Render with segmentation masks.
 
-        Args:
-            blend_path: Path to .blend file
-            output_dir: Directory for output files
-
-        Returns:
-            Path to generated HDF5 file
-
-        Implementation from POC src/bproc_renderer.py
+        Exact implementation from POC src/bproc_renderer.py
         """
         try:
             import blenderproc as bproc
@@ -87,103 +68,23 @@ class BProcRenderer:
         bproc.init()
 
         # Register pcb2blender materials for Mat4CAD node support
-        self._register_pcb2blender_materials()
-
-        # Load the blend file
-        objs = bproc.loader.load_blend(str(blend_path))
-        logger.info(f"Loaded {len(objs)} objects from {blend_path.name}")
-
-        # Assign category IDs for segmentation
-        self._assign_category_ids()
-
-        # Split multi-material objects for per-face segmentation
-        self._split_multimaterial_objects()
-
-        # Set background
-        bproc.renderer.set_world_background(self.config.background)
-
-        # Setup lighting
-        self._setup_lighting()
-
-        # Setup cameras
-        self._setup_cameras()
-
-        # Configure rendering
-        bproc.camera.set_resolution(self.config.resolution, self.config.resolution)
-
-        # Configure GPU rendering if enabled
-        if self.config.use_gpu:
-            bproc.renderer.set_render_devices(desired_gpu_device_type='OPTIX')
-            bpy.context.scene.cycles.device = 'GPU'
-            logger.info("GPU rendering enabled (OPTIX)")
-
-        # Set render engine to CYCLES and configure samples
-        bproc.renderer.set_max_amount_of_samples(self.config.render_samples)
-        if self.config.denoise:
-            bproc.renderer.enable_normals_output()
-            bpy.context.scene.cycles.use_denoising = True
-            logger.info(f"Denoising enabled with {self.config.render_samples} samples")
-
-        # Enable depth rendering
-        bproc.renderer.enable_depth_output(activate_antialiasing=False)
-
-        # Enable segmentation output
-        bproc.renderer.enable_segmentation_output(
-            map_by=["category_id", "material", "instance", "name"],
-            default_values={'category_id': 0, 'material': None}
-        )
-
-        # Render
-        data = bproc.renderer.render()
-
-        # Save to HDF5
-        output_dir.mkdir(parents=True, exist_ok=True)
-        bproc.writer.write_hdf5(str(output_dir), data)
-
-        # Find the output file (BlenderProc creates numbered files)
-        output_files = list(output_dir.glob("*.hdf5"))
-        if output_files:
-            output_path = output_files[-1]  # Get the latest
-        else:
-            output_path = output_dir / f"{blend_path.stem}.hdf5"
-
-        logger.info(f"Render complete: {output_path}")
-
-        return output_path
-
-    def _register_pcb2blender_materials(self):
-        """Register pcb2blender materials for Mat4CAD node support."""
-        import bpy
-
         addon_path = Path(__file__).parent.parent.parent / "pcb2blender"
         if str(addon_path) not in sys.path:
             sys.path.insert(0, str(addon_path))
-            logger.debug(f"Added pcb2blender to path: {addon_path}")
 
         try:
-            # Import only the materials module, not the full addon
-            # This avoids UI registration issues in BlenderProc
             from pcb2blender_importer import materials
             materials.register()
-            logger.info("✓ Registered pcb2blender materials")
+            print("✓ Registered pcb2blender materials")
         except Exception as e:
-            logger.warning(f"Could not register pcb2blender materials: {e}")
-            import traceback
-            logger.debug(traceback.format_exc())
+            print(f"Warning: Could not register pcb2blender materials: {e}")
 
-    def _assign_category_ids(self):
-        """
-        Assign segmentation categories based on materials.
+        # Load the objects into the scene
+        objs = bproc.loader.load_blend(str(blend_path))
+        print(f"Loaded {len(objs)} objects")
 
-        CRITICAL IMPLEMENTATION from POC:
-        - Check Mat4cad BSDF nodes
-        - mat_base property: 0=plastic, 2=metal
-        - Check node group names (MAT4CAD_metal vs MAT4CAD_plastic)
-        - Material keywords: solder, copper, metal, tin
-        """
-        import bpy
-
-        logger.info("Assigning segmentation category IDs...")
+        # === EXACT POC SEGMENTATION LOGIC ===
+        print("\nAssigning segmentation category IDs...")
         stats = {'metal_probable': 0, 'non_metal': 0}
 
         # First, assign category IDs to materials
@@ -210,18 +111,15 @@ class BProcRenderer:
                             mat_base_val = node['mat_base']
                             if mat_base_val == 2:
                                 has_metal_node = True
-                                logger.debug(f"  Mat4cad in {mat.name}: mat_base={mat_base_val} -> METAL")
                                 break
                         # Also check the node group name
                         if hasattr(node, 'node_tree') and node.node_tree:
                             group_name_lower = node.node_tree.name.lower()
                             if 'metal' in group_name_lower:
                                 has_metal_node = True
-                                logger.debug(f"  Mat4cad group {node.node_tree.name} -> METAL")
                                 break
                             elif 'plastic' in group_name_lower or 'ceramic' in group_name_lower:
                                 has_nonmetal_node = True
-                                logger.debug(f"  Mat4cad group {node.node_tree.name} -> NON-METAL")
                                 break
 
                     # Check for PCB-specific metal nodes
@@ -239,58 +137,18 @@ class BProcRenderer:
 
             if is_metal:
                 mat['category_id'] = 1  # Probable - metal
-                logger.debug(f"  Metal material: {mat.name} -> category 1")
+                print(f"  Metal material: {mat.name} -> category 1")
             else:
                 mat['category_id'] = 2  # Non-probable - non-metal
 
-        # Then assign to objects based on their materials or object name
-        for obj in bpy.data.objects:
-            if obj.type != 'MESH':
-                continue
-
-            # Solder joints are always metal (probable)
-            if obj.name.startswith('SOLDER_'):
-                obj['category_id'] = 1
-                stats['metal_probable'] += 1
-            # Skip PCB objects - let them use material-based segmentation
-            elif obj.name.startswith('PCB_'):
-                pass
-            # For component objects, assign based on their material
-            else:
-                if obj.material_slots and len(obj.material_slots) > 0:
-                    first_mat = obj.material_slots[0].material
-                    if first_mat and 'category_id' in first_mat:
-                        obj['category_id'] = first_mat['category_id']
-                        if first_mat['category_id'] == 1:
-                            stats['metal_probable'] += 1
-                        else:
-                            stats['non_metal'] += 1
-                    else:
-                        obj['category_id'] = 2
-                        stats['non_metal'] += 1
-                else:
-                    obj['category_id'] = 2
-                    stats['non_metal'] += 1
-
-        logger.info(f"✓ Assigned category IDs:")
-        logger.info(f"  Metal/Probable (cat 1):     {stats['metal_probable']}")
-        logger.info(f"  Non-metal (cat 2):          {stats['non_metal']}")
-
-    def _split_multimaterial_objects(self):
-        """
-        Split objects by material for per-face segmentation.
-
-        Uses: bpy.ops.mesh.separate(type='MATERIAL')
-        """
-        import bpy
-
-        logger.info("Splitting multi-material objects for per-face segmentation...")
+        # Split multi-material objects to allow per-material segmentation
+        print("\nSplitting multi-material objects for per-face segmentation...")
         objects_to_process = [obj for obj in bpy.data.objects if obj.type == 'MESH']
         split_count = 0
         multi_mat_count = 0
 
         for obj in objects_to_process:
-            # Skip solder joints and PCB (handle them separately)
+            # Skip solder joints and PCB
             if obj.name.startswith('SOLDER_') or obj.name.startswith('PCB_'):
                 continue
 
@@ -315,15 +173,46 @@ class BProcRenderer:
                 bpy.ops.object.mode_set(mode='OBJECT')
 
                 split_count += 1
-                logger.debug(f"  Split {obj.name}: {len(unique_mats)} materials")
 
-        logger.info(f"  Found {multi_mat_count} multi-material objects, split {split_count}")
+        print(f"\nFound {multi_mat_count} multi-material objects, split {split_count}\n")
 
-    def _setup_lighting(self):
-        """Setup sun + fill lights from config."""
-        import blenderproc as bproc
+        # Then assign to objects based on their materials or object name
+        for obj in bpy.data.objects:
+            if obj.type != 'MESH':
+                continue
 
-        # Create main sun lamp
+            # Solder joints are always metal (probable)
+            if obj.name.startswith('SOLDER_'):
+                obj['category_id'] = 1
+                stats['metal_probable'] += 1
+            # Skip PCB objects - let them use material-based segmentation
+            elif obj.name.startswith('PCB_'):
+                pass
+            # For component objects, assign based on their single material
+            else:
+                if obj.material_slots and len(obj.material_slots) > 0:
+                    first_mat = obj.material_slots[0].material
+                    if first_mat and 'category_id' in first_mat:
+                        obj['category_id'] = first_mat['category_id']
+                        if first_mat['category_id'] == 1:
+                            stats['metal_probable'] += 1
+                        else:
+                            stats['non_metal'] += 1
+                    else:
+                        obj['category_id'] = 2
+                        stats['non_metal'] += 1
+                else:
+                    obj['category_id'] = 2
+                    stats['non_metal'] += 1
+
+        print(f"\n✓ Assigned category IDs:")
+        print(f"  Metal/Probable (cat 1):         {stats['metal_probable']}")
+        print(f"  Non-metal/Non-probable (cat 2): {stats['non_metal']}\n")
+
+        # Set background
+        bproc.renderer.set_world_background(self.config.background)
+
+        # Setup lighting
         sun_config = self.config.lighting["sun"]
         sun_light = bproc.types.Light(light_type="SUN")
         sun_light.set_location(sun_config["location"])
@@ -336,16 +225,50 @@ class BProcRenderer:
             fill_light.set_location(fill_config["location"])
             fill_light.set_energy(fill_config["energy"])
 
-        logger.debug("Lighting setup complete")
-
-    def _setup_cameras(self):
-        """Setup camera positions from config."""
-        import blenderproc as bproc
-
+        # Setup cameras from config
+        bproc.camera.set_resolution(self.config.resolution, self.config.resolution)
         for camera in self.config.cameras:
             position = camera["position"]
             rotation = camera["rotation"]
             matrix_world = bproc.math.build_transformation_mat(position, rotation)
             bproc.camera.add_camera_pose(matrix_world)
 
-        logger.debug(f"Added {len(self.config.cameras)} camera poses")
+        # Configure GPU rendering if enabled
+        if self.config.use_gpu:
+            bproc.renderer.set_render_devices(desired_gpu_device_type='OPTIX')
+            bpy.context.scene.cycles.device = 'GPU'
+            print("GPU rendering enabled (OPTIX)")
+
+        # Set render samples
+        bproc.renderer.set_max_amount_of_samples(self.config.render_samples)
+        if self.config.denoise:
+            bproc.renderer.enable_normals_output()
+            bpy.context.scene.cycles.use_denoising = True
+            print(f"Denoising enabled with {self.config.render_samples} samples")
+
+        # Enable depth rendering
+        bproc.renderer.enable_depth_output(activate_antialiasing=False)
+
+        # Enable segmentation output
+        bproc.renderer.enable_segmentation_output(
+            map_by=["category_id", "material", "instance", "name"],
+            default_values={'category_id': 0, 'material': None}
+        )
+
+        # Render
+        print("\nRendering...")
+        data = bproc.renderer.render()
+
+        # Save to HDF5
+        output_dir.mkdir(parents=True, exist_ok=True)
+        bproc.writer.write_hdf5(str(output_dir), data)
+
+        # Find the output file
+        output_files = list(output_dir.glob("*.hdf5"))
+        if output_files:
+            output_path = output_files[-1]
+        else:
+            output_path = output_dir / f"{blend_path.stem}.hdf5"
+
+        logger.info(f"Render complete: {output_path}")
+        return output_path
