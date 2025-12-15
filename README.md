@@ -56,22 +56,151 @@ Production-ready pipeline for generating machine learning datasets of realistic 
        python /app/scripts/generate_single.py --sample-id 0 --output-dir /data/output
    ```
 
-### HPC Cluster (SLURM)
+### HPC Cluster (Apptainer/Singularity)
 
-1. **Build Singularity image**:
+The Docker image is available on Docker Hub and can be used with Apptainer for GPU-accelerated rendering on HPC clusters.
+
+1. **Pull image from Docker Hub**:
    ```bash
-   singularity build pcb-dataset.sif docker-daemon://pcb-dataset:latest
+   apptainer pull docker://yourusername/pcb-dataset-generator:latest
+   ```
+   This creates `pcb-dataset-generator_latest.sif`
+
+2. **Request interactive GPU session**:
+   ```bash
+   srun -p interactive-gpu --gres=gpu:a40:1 --time=4:00:00 --mem=64G --pty bash
    ```
 
-2. **Copy configs to scratch**:
+3. **Run batch generation**:
    ```bash
-   cp -r config /scratch/$USER/pcb_data/
+   apptainer exec --nv \
+       --bind "$(pwd)/data:/data" \
+       --bind "$(pwd)/config:/app/config:ro" \
+       --bind "$(pwd)/blender_cache:/users/4/radli009/.cache/cycles" \
+       ./pcb-dataset-generator_latest.sif \
+       python3 /app/scripts/generate_batch.py \
+           --start-id 38 \
+           --output-dir /data/test_output \
+           --config-dir /app/config \
+           --log-level DEBUG \
+           --num-samples 500
    ```
 
-3. **Submit array job**:
+   **Key flags**:
+   - `--nv`: Enable NVIDIA GPU support
+   - `--bind`: Mount host directories into container
+     - `data/`: Output directory (read-write)
+     - `config/`: Configuration files (read-only)
+     - `blender_cache/`: Blender Cycles render cache for faster renders
+
+4. **Submit SLURM array job** (alternative to interactive):
    ```bash
    python scripts/slurm/submit.py --num-samples 1000 --config-dir /scratch/$USER/pcb_data/config
    ```
+
+### HPC Optimization: Split CPU/GPU Pipeline
+
+For maximum HPC efficiency, split the pipeline into CPU-heavy and GPU-heavy stages to run on different partitions:
+
+**Stage 1: CPU Partition (Parallel preprocessing)**
+```bash
+# Run on high-core-count CPU nodes in parallel
+apptainer exec \
+    --bind "$(pwd)/data:/data" \
+    --bind "$(pwd)/config:/app/config:ro" \
+    ./pcb-dataset-generator_latest.sif \
+    python3 /app/scripts/generate_intermediate.py \
+        --num-samples 500 \
+        --start-id 0 \
+        --output-dir /data \
+        --config-dir /app/config \
+        --log-level INFO
+```
+
+This generates `.blend` files (steps 1-4):
+- Component placement (lightweight)
+- Board creation (KiCad - CPU-heavy)
+- PCB export (kicad-cli - CPU-heavy)
+- Blender import (model loading - CPU-heavy)
+
+**Stage 2: GPU Partition (Fast rendering)**
+```bash
+# Run on H100/A100 GPU nodes
+apptainer exec --nv \
+    --bind "$(pwd)/data:/data" \
+    --bind "$(pwd)/config:/app/config:ro" \
+    --bind "$(pwd)/blender_cache:/users/4/radli009/.cache/cycles" \
+    ./pcb-dataset-generator_latest.sif \
+    python3 /app/scripts/render_from_intermediate.py \
+        --num-samples 500 \
+        --start-id 0 \
+        --input-dir /data/renders \
+        --output-dir /data/output \
+        --config-dir /app/config \
+        --log-level INFO
+```
+
+This renders final outputs (steps 5-7):
+- Rendering with segmentation (GPU-heavy)
+- PNG extraction (lightweight)
+- Format conversion (lightweight)
+
+**Benefits:**
+- Run hundreds of CPU jobs in parallel on CPU partition
+- Use expensive GPU time only for fast rendering
+- Better resource utilization and cost efficiency
+
+### SLURM Batch Submission (MSI Cluster)
+
+For automated batch processing on MSI's HPC cluster, use the provided SLURM scripts:
+
+**One-command submission (CPU + GPU with dependency):**
+```bash
+# Copy config to scratch space first
+cp -r config /scratch/$USER/pcb_data/
+
+# Submit both jobs (GPU waits for CPU to finish)
+python scripts/slurm/submit_split_pipeline.py \
+    --num-samples 1000 \
+    --start-id 0 \
+    --gpu-type h100 \
+    --container-image ./pcb-dataset-generator_latest.sif \
+    --data-dir /scratch/$USER/pcb_data
+```
+
+**Available options:**
+- `--gpu-type`: Choose GPU type (`h100`, `a100`, `a40`, `l40s`, `v100`)
+- `--cpu-only`: Submit only CPU preprocessing job
+- `--gpu-only`: Submit only GPU rendering job (assumes .blend files exist)
+- `--cpu-partition`: CPU partition (default: `msismall`)
+- `--gpu-partition`: GPU partition (default: `msigpu`)
+- `--cpu-cpus`, `--cpu-mem`, `--cpu-time`: CPU job resources
+- `--gpu-cpus`, `--gpu-mem`, `--gpu-time`: GPU job resources
+
+**Monitor jobs:**
+```bash
+# Check job status
+squeue -u $USER
+
+# View logs
+tail -f /scratch/$USER/pcb_data/logs/cpu_prep_*.out
+tail -f /scratch/$USER/pcb_data/logs/gpu_render_*.out
+```
+
+**Manual submission (advanced):**
+```bash
+# Submit CPU job manually
+sbatch --array=0-999 \
+    --export=ALL,CONTAINER_IMAGE=./pcb-dataset-generator_latest.sif,DATA_DIR=/scratch/$USER/pcb_data \
+    scripts/slurm/cpu_preprocessing_array.sh
+
+# Submit GPU job manually (with dependency on job 12345)
+sbatch --array=0-999 \
+    --dependency=afterok:12345 \
+    --gres=gpu:h100:1 \
+    --export=ALL,CONTAINER_IMAGE=./pcb-dataset-generator_latest.sif,DATA_DIR=/scratch/$USER/pcb_data \
+    scripts/slurm/gpu_rendering_array.sh
+```
 
 ## Architecture
 
