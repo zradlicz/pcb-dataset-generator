@@ -1,0 +1,27 @@
+# ML Training Dependencies
+# For training segmentation models on PCB dataset
+
+# Core ML frameworks
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Data handling
+h5py>=3.8.0
+numpy>=1.24.0
+pillow>=10.0.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Jupyter
+jupyter>=1.0.0
+ipywidgets>=8.0.0
+
+# Metrics and utilities
+scikit-learn>=1.3.0
+tqdm>=4.65.0
+
+# Optional: Additional segmentation libraries
+# segmentation-models-pytorch>=0.3.0  # Pre-built architectures
+# albumentations>=1.3.0               # Data augmentation

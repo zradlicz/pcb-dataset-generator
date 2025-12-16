@@ -554,9 +554,24 @@ dependencies = [
 - [ ] Dataset validation and statistics
 - [ ] Train/val/test split
 - [ ] Documentation and archival
-- [ ] ML model training verification
+- [ ] Dataset publication/hosting for download
 
 **Target**: Production-ready dataset for ML training
+
+### Phase 5: ML Model Training (Separate Component)
+
+**Note**: ML training is NOT part of the automated pipeline. It will be a standalone deliverable.
+
+- [ ] PyTorch segmentation model training notebook
+  - Jupyter notebook for training metal/non-metal segmentation
+  - Google Colab compatible (dataset pulled from hosted location)
+  - Uses generated HDF5 dataset from Phase 4
+  - Includes train/val/test splits, metrics, visualization
+  - **Development approach**: Manual implementation (not AI-assisted)
+- [ ] Model evaluation and benchmarking
+- [ ] Trained model checkpoint publication
+
+**Target**: Demonstrate dataset utility for PCB component segmentation tasks
 
 **Progress (2025-12-16)**:
 - ✅ First production run initiated: 1000 samples
