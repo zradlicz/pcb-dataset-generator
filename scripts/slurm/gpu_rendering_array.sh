@@ -7,8 +7,8 @@
 #SBATCH --mem=32G                    # Memory for BlenderProc
 #SBATCH --time=01:00:00              # 1 hour - rendering is fast on GPU
 #SBATCH --partition=msigpu           # GPU partition
-#SBATCH --gres=gpu:h100:1            # Request 1 H100 GPU (or a100:1 for A100)
-#SBATCH --constraint=h100            # Ensure H100 nodes
+#SBATCH --gres=gpu:h100:1            # Request 1 H100 GPU (overridden by submit script)
+# NOTE: --constraint removed - GPU type is set by submit_split_pipeline.py --gpu-type flag
 #SBATCH --tmp=20G                    # Request 20GB local scratch for Blender cache
 
 # SLURM Array Job for PCB Dataset Generation - GPU Rendering Only
