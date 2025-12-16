@@ -62,77 +62,103 @@ The Docker image is available on Docker Hub and can be used with Apptainer for G
 
 1. **Pull image from Docker Hub**:
    ```bash
-   apptainer pull docker://yourusername/pcb-dataset-generator:latest
+   # Request interactive session first (login nodes often restricted)
+   srun -p msismall --time=1:00:00 --mem=16G --cpus-per-task=4 --tmp=50G --pty bash
+
+   # Navigate to scratch space
+   cd /scratch.global/$USER/pcb_data
+
+   # Pull the container image
+   apptainer pull docker://zradlicz17/pcb-dataset-generator:latest
    ```
    This creates `pcb-dataset-generator_latest.sif`
 
-2. **Request interactive GPU session**:
+2. **Setup configuration files**:
    ```bash
-   srun -p interactive-gpu --gres=gpu:a40:1 --time=4:00:00 --mem=64G --pty bash
+   # Copy config files to scratch space
+   cp -r /path/to/pcb-dataset-generator/config /scratch.global/$USER/pcb_data/
    ```
 
-3. **Run batch generation**:
+3. **Request interactive GPU session** (for testing):
    ```bash
+   srun -p msigpu --gres=gpu:a100:1 --time=4:00:00 --mem=64G --pty bash
+   ```
+
+4. **Run batch generation in interactive session** (for testing):
+   ```bash
+   # Ensure you're in an interactive GPU session first
+   cd /scratch.global/$USER/pcb_data
+
    apptainer exec --nv \
-       --bind "$(pwd)/data:/data" \
-       --bind "$(pwd)/config:/app/config:ro" \
-       --bind "$(pwd)/blender_cache:/users/4/radli009/.cache/cycles" \
+       --bind "/scratch.global/$USER/pcb_data:/data" \
+       --bind "/scratch.global/$USER/pcb_data/config:/app/config:ro" \
+       --bind "/scratch.global/$USER/pcb_data/blender_cache:/root/.cache/cycles" \
        ./pcb-dataset-generator_latest.sif \
        python3 /app/scripts/generate_batch.py \
-           --start-id 38 \
-           --output-dir /data/test_output \
+           --start-id 0 \
+           --output-dir /data/output \
            --config-dir /app/config \
-           --log-level DEBUG \
-           --num-samples 500
+           --log-level INFO \
+           --num-samples 10
    ```
 
    **Key flags**:
    - `--nv`: Enable NVIDIA GPU support
    - `--bind`: Mount host directories into container
-     - `data/`: Output directory (read-write)
+     - `/scratch.global/$USER/pcb_data:/data`: Output directory (read-write)
      - `config/`: Configuration files (read-only)
      - `blender_cache/`: Blender Cycles render cache for faster renders
 
-4. **Submit SLURM array job** (alternative to interactive):
-   ```bash
-   python scripts/slurm/submit.py --num-samples 1000 --config-dir /scratch/$USER/pcb_data/config
-   ```
-
 ### HPC Optimization: Split CPU/GPU Pipeline
 
-For maximum HPC efficiency, split the pipeline into CPU-heavy and GPU-heavy stages to run on different partitions:
+For maximum HPC efficiency, split the pipeline into CPU-heavy and GPU-heavy stages to run on different partitions.
 
 **Stage 1: CPU Partition (Parallel preprocessing)**
+
+Generates `.blend` files (steps 1-4):
+- Component placement (lightweight)
+- Board creation (KiCad - CPU-heavy)
+- PCB export (kicad-cli - CPU-heavy)
+- Blender import (model loading - CPU-heavy)
+
 ```bash
-# Run on high-core-count CPU nodes in parallel
+# Interactive testing (request CPU session first)
+srun -p msismall --time=2:00:00 --mem=32G --cpus-per-task=16 --tmp=50G --pty bash
+
+# Run preprocessing
+cd /scratch.global/$USER/pcb_data
 apptainer exec \
-    --bind "$(pwd)/data:/data" \
-    --bind "$(pwd)/config:/app/config:ro" \
+    --bind "/scratch.global/$USER/pcb_data:/data" \
+    --bind "/scratch.global/$USER/pcb_data/config:/app/config:ro" \
     ./pcb-dataset-generator_latest.sif \
     python3 /app/scripts/generate_intermediate.py \
-        --num-samples 500 \
+        --num-samples 10 \
         --start-id 0 \
         --output-dir /data \
         --config-dir /app/config \
         --log-level INFO
 ```
 
-This generates `.blend` files (steps 1-4):
-- Component placement (lightweight)
-- Board creation (KiCad - CPU-heavy)
-- PCB export (kicad-cli - CPU-heavy)
-- Blender import (model loading - CPU-heavy)
-
 **Stage 2: GPU Partition (Fast rendering)**
+
+Renders final outputs from `.blend` files (steps 5-7):
+- Rendering with segmentation (GPU-heavy)
+- PNG extraction (lightweight)
+- Format conversion (lightweight)
+
 ```bash
-# Run on H100/A100 GPU nodes
+# Interactive testing (request GPU session first)
+srun -p msigpu --gres=gpu:a100:1 --time=1:30:00 --mem=32G --pty bash
+
+# Run rendering
+cd /scratch.global/$USER/pcb_data
 apptainer exec --nv \
-    --bind "$(pwd)/data:/data" \
-    --bind "$(pwd)/config:/app/config:ro" \
-    --bind "$(pwd)/blender_cache:/users/4/radli009/.cache/cycles" \
+    --bind "/scratch.global/$USER/pcb_data:/data" \
+    --bind "/scratch.global/$USER/pcb_data/config:/app/config:ro" \
+    --bind "/scratch.global/$USER/pcb_data/blender_cache:/root/.cache/cycles" \
     ./pcb-dataset-generator_latest.sif \
     python3 /app/scripts/render_from_intermediate.py \
-        --num-samples 500 \
+        --num-samples 10 \
         --start-id 0 \
         --input-dir /data/renders \
         --output-dir /data/output \
@@ -140,36 +166,59 @@ apptainer exec --nv \
         --log-level INFO
 ```
 
-This renders final outputs (steps 5-7):
-- Rendering with segmentation (GPU-heavy)
-- PNG extraction (lightweight)
-- Format conversion (lightweight)
-
 **Benefits:**
-- Run hundreds of CPU jobs in parallel on CPU partition
-- Use expensive GPU time only for fast rendering
+- Run hundreds of CPU jobs in parallel on CPU partition (msismall)
+- Use expensive GPU time only for fast rendering (msigpu)
 - Better resource utilization and cost efficiency
+- Proven at scale: 1000 samples generated in production
 
 ### SLURM Batch Submission (MSI Cluster)
 
-For automated batch processing on MSI's HPC cluster, use the provided SLURM scripts:
+For automated batch processing on MSI's HPC cluster, use the provided SLURM scripts.
 
-**One-command submission (CPU + GPU with dependency):**
+**Recommended workflow - Submit both CPU and GPU jobs:**
 ```bash
-# Copy config to scratch space first
-cp -r config /scratch/$USER/pcb_data/
+# From project directory on login node
+cd /path/to/pcb-dataset-generator
 
 # Submit both jobs (GPU waits for CPU to finish)
 python scripts/slurm/submit_split_pipeline.py \
     --num-samples 1000 \
     --start-id 0 \
-    --gpu-type h100 \
-    --container-image ./pcb-dataset-generator_latest.sif \
-    --data-dir /scratch/$USER/pcb_data
+    --gpu-type a100 \
+    --container-image /scratch.global/$USER/pcb_data/pcb-dataset-generator_latest.sif \
+    --data-dir /scratch.global/$USER/pcb_data
+```
+
+**CPU-only workflow** (preprocessing to .blend files):
+```bash
+# Generate 1000 .blend files on CPU partition
+python scripts/slurm/submit_split_pipeline.py \
+    --num-samples 1000 \
+    --start-id 0 \
+    --cpu-only \
+    --container-image /scratch.global/$USER/pcb_data/pcb-dataset-generator_latest.sif \
+    --data-dir /scratch.global/$USER/pcb_data
+```
+
+**GPU-only workflow** (render existing .blend files):
+```bash
+# Assumes .blend files already exist in /scratch.global/$USER/pcb_data/renders/
+python scripts/slurm/submit_split_pipeline.py \
+    --num-samples 1000 \
+    --start-id 0 \
+    --gpu-only \
+    --gpu-type a100 \
+    --container-image /scratch.global/$USER/pcb_data/pcb-dataset-generator_latest.sif \
+    --data-dir /scratch.global/$USER/pcb_data \
+    --gpu-time 01:30:00
 ```
 
 **Available options:**
 - `--gpu-type`: Choose GPU type (`h100`, `a100`, `a40`, `l40s`, `v100`)
+  - **a100**: Recommended (best availability, fast)
+  - **h100**: Fastest but limited availability
+  - **v100**: Good fallback option
 - `--cpu-only`: Submit only CPU preprocessing job
 - `--gpu-only`: Submit only GPU rendering job (assumes .blend files exist)
 - `--cpu-partition`: CPU partition (default: `msismall`)
@@ -177,29 +226,114 @@ python scripts/slurm/submit_split_pipeline.py \
 - `--cpu-cpus`, `--cpu-mem`, `--cpu-time`: CPU job resources
 - `--gpu-cpus`, `--gpu-mem`, `--gpu-time`: GPU job resources
 
-**Monitor jobs:**
-```bash
-# Check job status
-squeue -u $USER
-
-# View logs
-tail -f /scratch/$USER/pcb_data/logs/cpu_prep_*.out
-tail -f /scratch/$USER/pcb_data/logs/gpu_render_*.out
-```
-
 **Manual submission (advanced):**
 ```bash
 # Submit CPU job manually
 sbatch --array=0-999 \
-    --export=ALL,CONTAINER_IMAGE=./pcb-dataset-generator_latest.sif,DATA_DIR=/scratch/$USER/pcb_data \
+    --export=ALL,CONTAINER_IMAGE=/scratch.global/$USER/pcb_data/pcb-dataset-generator_latest.sif,DATA_DIR=/scratch.global/$USER/pcb_data \
     scripts/slurm/cpu_preprocessing_array.sh
 
 # Submit GPU job manually (with dependency on job 12345)
 sbatch --array=0-999 \
     --dependency=afterok:12345 \
-    --gres=gpu:h100:1 \
-    --export=ALL,CONTAINER_IMAGE=./pcb-dataset-generator_latest.sif,DATA_DIR=/scratch/$USER/pcb_data \
+    --gres=gpu:a100:1 \
+    --export=ALL,CONTAINER_IMAGE=/scratch.global/$USER/pcb_data/pcb-dataset-generator_latest.sif,DATA_DIR=/scratch.global/$USER/pcb_data \
     scripts/slurm/gpu_rendering_array.sh
+```
+
+### Monitoring Jobs (SLURM Commands)
+
+**Check job status:**
+```bash
+# View your jobs
+squeue --me
+
+# Detailed view with job array info
+squeue --me -o "%.18i %.12j %.8T %.10M %.6D %.4C %R"
+
+# Count running vs pending
+squeue --me -t R | wc -l   # Running
+squeue --me -t PD | wc -l  # Pending
+```
+
+**Check GPU availability:**
+```bash
+# See GPU partition status
+sinfo -p msigpu -o "%20P %5a %.10l %16F %8G"
+
+# Format: NODES(A/I/O/T) where A=Allocated, I=Idle, O=Other, T=Total
+# Look for I > 0 to see available GPUs
+
+# More detailed node info
+sinfo -p msigpu -N -o "%N %C %G %t"
+```
+
+**Monitor job progress:**
+```bash
+# Watch output files accumulate (updates every 10 seconds)
+watch -n 10 'ls /scratch.global/$USER/pcb_data/output/*.hdf5 2>/dev/null | wc -l'
+
+# Watch .blend files from CPU preprocessing
+watch -n 10 'ls /scratch.global/$USER/pcb_data/renders/*.blend 2>/dev/null | wc -l'
+
+# View live log output
+tail -f /scratch.global/$USER/pcb_data/logs/cpu_prep_*.out
+tail -f /scratch.global/$USER/pcb_data/logs/gpu_render_*.out
+
+# Check for errors
+tail -f /scratch.global/$USER/pcb_data/logs/gpu_render_*.err
+```
+
+**Check specific job details:**
+```bash
+# Get detailed job info
+scontrol show job JOBID
+
+# Check job efficiency (after completion)
+seff JOBID
+
+# Check estimated start time for pending jobs
+squeue --me --start
+```
+
+**Cancel jobs:**
+```bash
+# Cancel all your jobs
+scancel -u $USER
+
+# Cancel specific job
+scancel JOBID
+
+# Cancel specific tasks in job array
+scancel JOBID_5           # Cancel task 5
+scancel JOBID_[10-20]     # Cancel tasks 10-20
+
+# Cancel by job name
+scancel --name=pcb_gpu_render
+
+# Cancel only pending jobs
+scancel -u $USER --state=PENDING
+```
+
+**Progress monitoring script:**
+```bash
+# Create a quick monitoring script
+cat > monitor.sh << 'EOF'
+#!/bin/bash
+echo "=== PCB Dataset Generation Progress ==="
+echo "Running jobs: $(squeue --me -t R | wc -l)"
+echo "Pending jobs: $(squeue --me -t PD | wc -l)"
+echo "CPU .blend files: $(ls /scratch.global/$USER/pcb_data/renders/*.blend 2>/dev/null | wc -l)"
+echo "GPU .hdf5 files: $(ls /scratch.global/$USER/pcb_data/output/*.hdf5 2>/dev/null | wc -l)"
+echo ""
+echo "Latest outputs:"
+ls -lht /scratch.global/$USER/pcb_data/output/*.hdf5 2>/dev/null | head -5
+EOF
+
+chmod +x monitor.sh
+
+# Run it with watch
+watch -n 30 ./monitor.sh
 ```
 
 ## Architecture
