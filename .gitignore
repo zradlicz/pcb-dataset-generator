@@ -68,8 +68,15 @@ logs/
 !data/output/.gitkeep
 !data/logs/.gitkeep
 
-# Report - ignore all files except .tex and .pdf
-report/*
-!report/*.tex
-!report/*.pdf
-!report/.gitkeep
+# Report - ignore LaTeX intermediate files but keep source, PDF, and figures
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.synctex.gz
+report/*.fdb_latexmk
+report/*.fls
+report/*.bbl
+report/*.blg
+report/*.bcf
+report/*.run.xml

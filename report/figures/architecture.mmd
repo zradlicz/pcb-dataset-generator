@@ -1,0 +1,32 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#e3f2fd','primaryTextColor':'#000','primaryBorderColor':'#1976d2','lineColor':'#1976d2','secondaryColor':'#fff3e0','tertiaryColor':'#f3e5f5'}}}%%
+flowchart TB
+    Start([Start: YAML Configuration Files]) --> CP[Component Placement<br/>Perlin Noise Algorithm]
+
+    CP --> |Component positions<br/>x, y, rotation| PCB[PCB Generation<br/>KiCad Python API]
+
+    PCB --> |.kicad_pcb file<br/>3D models + traces| Export[Model Export<br/>kicad-cli VRML export]
+
+    Export --> |.vrml file<br/>units=meters| Import[Model Import<br/>pcb2blender plugin]
+
+    Import --> |.blend file<br/>Materials + Objects| Render[Rendering<br/>BlenderProc + GPU]
+
+    Render --> |HDF5 files<br/>RGB + Segmentation| Training[Model Training<br/>U-Net PyTorch]
+
+    Training --> End([Trained Segmentation Model])
+
+    style Start fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style End fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style CP fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style PCB fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Export fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Import fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Render fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Training fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+
+    classDef configClass fill:#fffde7,stroke:#f57f17,stroke-width:2px,stroke-dasharray: 5 5
+
+    Config1[placement.yaml]:::configClass -.-> CP
+    Config2[render.yaml]:::configClass -.-> Render
+    Config3[pipeline.yaml]:::configClass -.-> CP
+    Config3 -.-> PCB
+    Config3 -.-> Render
