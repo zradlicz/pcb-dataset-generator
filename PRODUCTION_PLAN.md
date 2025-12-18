@@ -562,23 +562,71 @@ dependencies = [
 
 **Note**: ML training is NOT part of the automated pipeline. It will be a standalone deliverable.
 
-- [ ] PyTorch segmentation model training notebook
+- [x] PyTorch segmentation model training notebook ✅
   - Jupyter notebook for training metal/non-metal segmentation
-  - Google Colab compatible (dataset pulled from hosted location)
+  - Google Colab compatible (auto-detects environment, mounts Google Drive)
   - Uses generated HDF5 dataset from Phase 4
   - Includes train/val/test splits, metrics, visualization
   - **Development approach**: Manual implementation (not AI-assisted)
-- [ ] Model evaluation and benchmarking
-- [ ] Trained model checkpoint publication
+- [x] Dataset integrity validation ✅
+  - Implemented HDF5 file corruption checker
+  - Found and documented 18 corrupted files out of 695 total
+  - Automatic filtering of corrupted files in training pipeline
+- [x] Model evaluation and benchmarking ✅
+  - Trained U-Net model for 50 epochs on Google Colab (Tesla T4)
+  - Dataset: 689 valid samples (482 train / 137 val / 70 test)
+  - Best model from epoch 6 with validation loss 0.0939
+- [x] Proof-of-concept training complete ✅
+  - Model checkpoint saved (`best_model.pth`)
+  - Demonstrates dataset utility for PCB segmentation tasks
 
 **Target**: Demonstrate dataset utility for PCB component segmentation tasks
 
-**Progress (2025-12-16)**:
-- ✅ First production run initiated: 1000 samples
-  - CPU preprocessing: 1000 .blend files complete
-  - GPU rendering: 250 samples in progress (A100)
-  - Remaining 750 samples queued for GPU rendering
-- 🎯 Next: Complete GPU rendering, validate outputs, generate dataset statistics
+**Progress (2025-12-17)**:
+- ✅ **Training notebook implemented** (`notebooks/pcb_segmentation_training.ipynb`)
+  - **Architecture**: U-Net with 31M parameters for 3-class segmentation (background, metal, non-metal)
+  - **Training configuration**:
+    - 256x256 random crops (16x memory reduction from 1024x1024)
+    - Batch size: 4 with num_workers=0 (HDF5 compatibility)
+    - Data augmentation: horizontal/vertical flips
+    - Optimizer: Adam (lr=1e-4, weight_decay=1e-5)
+    - Loss: CrossEntropyLoss
+    - Scheduler: ReduceLROnPlateau
+  - **Metrics**: IoU, Dice coefficient, pixel accuracy per class
+  - **Visualization**: TensorBoard logging, confusion matrix, failure case analysis
+  - **Real-world testing**: Inference on user-provided PCB images (resize + center crop to 256x256)
+  - **Environment support**: Auto-detection for Colab vs local execution
+- ✅ **Dataset validation complete**
+  - Generated 695 HDF5 samples (1024x1024 resolution)
+  - Identified 18 corrupted files (filter returned failure during read)
+  - Valid dataset: 677 samples ready for training
+  - Automatic corruption filtering integrated into notebook
+- ✅ **Memory optimization**
+  - 256x256 test forward pass (not 1024x1024) to save GPU memory
+  - Automatic GPU cleanup after model initialization
+  - Compatible with 8GB GPU (RTX 4060) and 16GB Colab GPUs (T4/A100)
+- ✅ **Model training completed** (Google Colab, Tesla T4 GPU)
+  - **Training time**: 50 epochs (best model at epoch 6)
+  - **Final dataset**: 689 valid samples after corruption filtering
+  - **Test set performance** (70 samples, 256x256 crops):
+    - Overall pixel accuracy: **98.50%**
+    - Mean IoU: **77.87%** (background: 98.56%, metal: 52.07%, non-metal: 82.98%)
+    - Mean Dice coefficient: **86.08%**
+  - **Per-class accuracy**:
+    - Class 0 (Background): 99.88%
+    - Class 1 (Metal): 58.90%
+    - Class 2 (Non-metal): 85.81%
+  - **Key findings**:
+    - Model excels at background detection
+    - Moderate performance on metal detection (room for improvement)
+    - Good performance on non-metal component detection
+    - Proof-of-concept successful - demonstrates dataset utility
+  - **Real-world inference**: Successfully tested on user-provided PCB photos
+  - **Note**: Training serves as proof-of-concept. Dataset generator and model require tuning for production use.
+- 🎯 **Next steps**:
+  - Complete Phase 4 GPU rendering (750 samples remaining)
+  - Optimize dataset generation parameters for better segmentation quality
+  - Consider fine-tuning model with additional data augmentation
 
 ---
 
@@ -790,5 +838,35 @@ Priority 2 - Validation:
   - Validated resource utilization (50GB scratch, 2hr CPU, 1.5hr GPU)
   - Container image (Docker Hub → Apptainer) working flawlessly on MSI
 
-**Last Updated**: 2025-12-16
-**Status**: Phase 3 - HPC Deployment (ACTIVE PRODUCTION RUN - First large-scale dataset generation in progress!)
+**Completed (2025-12-17)** - ML Training Pipeline & Dataset Validation:
+- ✅ **Training notebook complete** - Full PyTorch segmentation pipeline
+  - Created `notebooks/pcb_segmentation_training.ipynb`
+  - U-Net architecture (31M parameters) for 3-class segmentation
+  - Google Colab compatible with auto-detection
+  - 256x256 random crops for memory efficiency
+  - TensorBoard logging, metrics, confusion matrix
+  - Real-world test image inference capability
+- ✅ **Dataset integrity validation** - Corruption checker implemented
+  - Created `check_hdf5_integrity.py` script
+  - Scanned all 695 generated HDF5 files
+  - Identified 18 corrupted files (2.6% corruption rate)
+  - Valid dataset: 689 samples ready for training (6 filtered by notebook's checker)
+  - Automatic filtering integrated into training notebook
+- ✅ **Memory optimization** - GPU compatibility fixes
+  - 256x256 test forward pass (saves ~6.5GB GPU memory)
+  - Automatic GPU cleanup after model initialization
+  - num_workers=0 for HDF5 compatibility (prevents multiprocessing errors)
+  - Works on 8GB GPU (RTX 4060) and Colab GPUs (T4/A100)
+- ✅ **Proof-of-concept model training complete** (Google Colab, Tesla T4)
+  - Trained on 689 valid samples (482 train / 137 val / 70 test)
+  - 50 epochs, best model at epoch 6 (val_loss: 0.0939)
+  - Test accuracy: 98.50% overall, 77.87% mean IoU
+  - Successfully demonstrated dataset utility for PCB segmentation
+  - Model checkpoint saved for future use
+  - Real-world test images successfully processed
+- ✅ **Codebase cleanup**
+  - Removed redundant `placement_temp.py` file
+  - Single source of truth: `placement.py`
+
+**Last Updated**: 2025-12-17
+**Status**: Phase 5 - ML Model Training (COMPLETE ✅ - Proof-of-concept training successful, demonstrates dataset generation pipeline end-to-end!)
