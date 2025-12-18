@@ -2,7 +2,59 @@
 
 Production-ready pipeline for generating machine learning datasets of realistic PCB images with segmentation ground truth.
 
-## Features
+## Overview
+
+PCBs are ubiquitous in electronics, but automated analysis tools for hardware debugging lag far behind software debugging capabilities. Existing PCB datasets for machine learning are limited: bounding box datasets lack precision for probe placement, defect datasets don't provide spatial information, and segmentation datasets are too small (typically <100 images) for training robust models across varied PCB designs.
+
+This project addresses these limitations by providing a **fully automated, highly configurable pipeline** for generating synthetic PCB datasets with pixel-perfect segmentation labels. The system uses procedural generation techniques inspired by video game map generation to create realistic PCB layouts, then renders them with photorealistic materials and automatically generates segmentation ground truth.
+
+### Pipeline Architecture
+
+The pipeline consists of 5 main stages:
+
+![Pipeline Architecture](report/figures/architecture_overview.png)
+
+1. **Component Placement**: Perlin noise-based procedural algorithm creates organic component layouts with 40+ component types
+2. **PCB Generation**: KiCad Python API generates complete PCB files with traces, routing, and 3D models
+3. **Model Export/Import**: Headless export via kicad-cli and pcb2blender bridge to Blender
+4. **Rendering**: BlenderProc creates photorealistic renders with automatic material-based segmentation
+5. **Model Training**: Example U-Net implementation demonstrates dataset utility for metal/non-metal segmentation
+
+### Example Output
+
+The pipeline generates high-quality synthetic PCB images with corresponding segmentation masks:
+
+![Rendering Example](report/figures/rendering_example.png)
+
+Each sample includes RGB images and multiple segmentation maps (metal, non-metal, background, instance, etc.) in HDF5 or COCO format.
+
+### Results
+
+A proof-of-concept dataset of 689 samples was generated and used to train a U-Net segmentation model:
+
+![Class Accuracy](report/figures/class_accuracy.png)
+
+**Training Results:**
+- Overall pixel accuracy: **98.5%** on synthetic test data
+- Training time: ~10 minutes on Google Colab (Tesla T4)
+- Model: 31M parameter U-Net trained for 50 epochs
+- Best model selected at epoch 6 (validation loss: 0.0939)
+
+![Training Curves](report/figures/training_curves.png)
+
+**Per-class performance:**
+- Background: 99.88% accuracy
+- Metal components: 58.90% accuracy
+- Non-metal components: 85.81% accuracy
+- Mean IoU: 77.87%
+
+The main limitation is the **sim-to-real gap** - while the model performs excellently on synthetic data, it struggles on real-world PCB images due to lighting, texture, and style differences. Future work will focus on domain randomization, higher rendering resolution, and style transfer techniques to close this gap.
+
+**For more details, see the full paper in [`report/pcb_segmentation_paper.pdf`](report/pcb_segmentation_paper.pdf).**
+
+---
+
+## Key Features
 
 - **Organic Component Placement**: Perlin noise-based clustering for realistic layouts
 - **Automated PCB Generation**: KiCad Python API for programmatic board creation

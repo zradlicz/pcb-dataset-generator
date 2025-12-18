@@ -67,3 +67,9 @@ logs/
 !data/renders/.gitkeep
 !data/output/.gitkeep
 !data/logs/.gitkeep
+
+# Report - ignore all files except .tex and .pdf
+report/*
+!report/*.tex
+!report/*.pdf
+!report/.gitkeep
