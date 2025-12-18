@@ -33,6 +33,10 @@ data/logs/
 *.jpg
 *.json
 
+# Exceptions - allow images in report directory
+!report/**/*.png
+!report/**/*.jpg
+
 # IDE
 .vscode/
 .idea/
