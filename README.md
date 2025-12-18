@@ -548,15 +548,13 @@ If you use this dataset generator in your research, please cite:
 ```bibtex
 @software{pcb_dataset_generator,
   title = {PCB Dataset Generator},
-  author = {Your Name},
+  author = {Zach Radlicz},
   year = {2025},
   url = {https://github.com/yourusername/pcb-dataset-generator}
 }
 ```
 
 ## License
-
-[Your chosen license]
 
 ## Acknowledgments
 
