@@ -57,3 +57,38 @@ rotation:
   snap_angle: 90.0         # Snap rotations to multiples of this angle (degrees)
   allow_45deg: false       # Allow 45-degree rotations (in addition to 90-degree)
   randomize: true          # Randomize rotation within snap angles
+
+# Domain Randomization Settings
+# Enable these to vary placement parameters across samples for better model generalization
+domain_randomization:
+  enabled: true            # Master switch for all randomization
+
+  # Perlin noise randomization
+  perlin:
+    randomize_scale: true
+    scale_range: [20.0, 40.0]       # Vary noise smoothness
+    randomize_octaves: true
+    octaves_range: [3, 5]           # Vary detail levels
+    randomize_persistence: true
+    persistence_range: [0.4, 0.6]   # Vary amplitude decay
+    randomize_lacunarity: true
+    lacunarity_range: [1.8, 2.2]    # Vary frequency increase
+
+  # Vignette randomization
+  vignette:
+    randomize_strength: true
+    strength_range: [0.5, 0.9]      # Vary edge falloff
+
+  # Component count randomization (±variation percentage)
+  components:
+    randomize_count: true
+    count_variation: 0.2            # ±20% variation in component counts
+
+  # Board dimension randomization
+  board:
+    randomize_dimensions: true
+    width_range: [80.0, 120.0]      # Board width variation (mm)
+    height_range: [80.0, 120.0]     # Board height variation (mm)
+    shape_options:                  # Board shape variations
+      - rectangular                 # Standard rectangular board
+      - square                      # Perfect square board

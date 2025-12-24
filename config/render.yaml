@@ -38,6 +38,83 @@ background:
   color: [0.8, 0.8, 0.8]           # RGB background color (light grey)
   # Future: HDRI environment maps for realistic reflections
 
+# Domain Randomization Settings
+# Enable these to vary rendering parameters across samples for better model generalization
+domain_randomization:
+  enabled: true                    # Master switch for all randomization
+
+  # Lighting randomization
+  lighting:
+    sun_energy_range: [1.5, 3.0]   # Randomize sun intensity
+    sun_rotation_range:            # Randomize sun angle (radians)
+      x: [-0.3, 0.3]               # Pitch variation
+      y: [-0.3, 0.3]               # Yaw variation
+      z: [0.0, 6.28]               # Full rotation around Z-axis
+    fill_energy_range: [0.3, 0.9]  # Randomize fill light intensity
+
+  # Camera randomization
+  camera:
+    position_offset_range:         # Add random offset to camera position
+      x: [-0.02, 0.02]             # ±2cm horizontal offset
+      y: [-0.02, 0.02]             # ±2cm vertical offset
+      z: [0.0, 0.0]                # Keep height constant
+    rotation_offset_range:         # Add random tilt to camera
+      x: [-0.1, 0.1]               # ±5.7° pitch
+      y: [-0.1, 0.1]               # ±5.7° roll
+      z: [-0.2, 0.2]               # ±11.5° yaw rotation
+
+  # Background randomization
+  background:
+    randomize_color: true
+    color_options:                 # List of possible background colors
+      - [0.95, 0.95, 0.95]         # White/light grey (clean)
+      - [0.8, 0.8, 0.8]            # Medium grey (default)
+      - [0.6, 0.6, 0.6]            # Dark grey
+      - [0.9, 0.85, 0.75]          # Beige/desk color
+      - [0.7, 0.65, 0.55]          # Wood brown
+      - [0.3, 0.3, 0.35]           # Dark surface
+
+  # Soldermask color randomization
+  soldermask:
+    randomize_color: true
+    color_options:                 # Common PCB soldermask colors
+      - name: "green"
+        rgb: [0.05, 0.3, 0.05]     # Traditional green
+        metallic: 0.1
+        roughness: 0.4
+      - name: "blue"
+        rgb: [0.05, 0.1, 0.4]      # Blue
+        metallic: 0.1
+        roughness: 0.35
+      - name: "red"
+        rgb: [0.4, 0.05, 0.05]     # Red
+        metallic: 0.1
+        roughness: 0.4
+      - name: "black"
+        rgb: [0.02, 0.02, 0.02]    # Black (matte)
+        metallic: 0.05
+        roughness: 0.5
+      - name: "white"
+        rgb: [0.8, 0.8, 0.8]       # White
+        metallic: 0.05
+        roughness: 0.35
+      - name: "yellow"
+        rgb: [0.6, 0.5, 0.05]      # Yellow
+        metallic: 0.1
+        roughness: 0.4
+      - name: "purple"
+        rgb: [0.3, 0.05, 0.3]      # Purple (rare)
+        metallic: 0.1
+        roughness: 0.4
+
+  # Board shape randomization
+  board:
+    randomize_shape: true
+    shape_options:
+      - rectangular                # Standard rectangular board
+      - rounded_corners            # Rounded corner board
+      - circular                   # Circular board (for specialized applications)
+
 # Rendering resolution
 # Can be overridden by pipeline config for multi-resolution generation
 resolution: 1024                    # Width and height in pixels (square images) - TESTING: use 512, PRODUCTION: use 2048

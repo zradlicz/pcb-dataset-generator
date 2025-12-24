@@ -56,28 +56,97 @@ class PlacementConfig:
     @classmethod
     def from_dict(cls, config: dict) -> "PlacementConfig":
         """Create config from dictionary (loaded from YAML)."""
+        # Apply domain randomization if enabled
+        dr_config = config.get("domain_randomization", {})
+        dr_enabled = dr_config.get("enabled", False)
+
+        # Perlin noise parameters with optional randomization
+        scale = config["perlin"]["scale"]
+        octaves = config["perlin"]["octaves"]
+        persistence = config["perlin"]["persistence"]
+        lacunarity = config["perlin"]["lacunarity"]
+
+        if dr_enabled:
+            perlin_dr = dr_config.get("perlin", {})
+            if perlin_dr.get("randomize_scale", False) and "scale_range" in perlin_dr:
+                scale = random.uniform(*perlin_dr["scale_range"])
+                logger.info(f"Randomized Perlin scale: {scale:.2f}")
+            if perlin_dr.get("randomize_octaves", False) and "octaves_range" in perlin_dr:
+                octaves = random.randint(*perlin_dr["octaves_range"])
+                logger.info(f"Randomized Perlin octaves: {octaves}")
+            if perlin_dr.get("randomize_persistence", False) and "persistence_range" in perlin_dr:
+                persistence = random.uniform(*perlin_dr["persistence_range"])
+                logger.info(f"Randomized Perlin persistence: {persistence:.2f}")
+            if perlin_dr.get("randomize_lacunarity", False) and "lacunarity_range" in perlin_dr:
+                lacunarity = random.uniform(*perlin_dr["lacunarity_range"])
+                logger.info(f"Randomized Perlin lacunarity: {lacunarity:.2f}")
+
+        # Vignette parameters with optional randomization
+        vignette_enabled = config["vignette"]["enabled"]
+        vignette_strength = config["vignette"]["strength"]
+
+        if dr_enabled:
+            vignette_dr = dr_config.get("vignette", {})
+            if vignette_dr.get("randomize_strength", False) and "strength_range" in vignette_dr:
+                vignette_strength = random.uniform(*vignette_dr["strength_range"])
+                logger.info(f"Randomized vignette strength: {vignette_strength:.2f}")
+
+        # Component counts with optional randomization
+        large_count = config["components"].get("large", {}).get("count", 1)
+        medium_count = config["components"].get("medium", {}).get("count", 20)
+        small_count_total = config["components"].get("small", {}).get("count", 60)
+
+        if dr_enabled:
+            comp_dr = dr_config.get("components", {})
+            if comp_dr.get("randomize_count", False) and "count_variation" in comp_dr:
+                variation = comp_dr["count_variation"]
+                large_count = int(large_count * random.uniform(1 - variation, 1 + variation))
+                medium_count = int(medium_count * random.uniform(1 - variation, 1 + variation))
+                small_count_total = int(small_count_total * random.uniform(1 - variation, 1 + variation))
+                logger.info(f"Randomized component counts: large={large_count}, medium={medium_count}, small={small_count_total}")
+
+        # Board dimensions with optional randomization
+        board_width = config["board"]["width"]
+        board_height = config["board"]["height"]
+
+        if dr_enabled:
+            board_dr = dr_config.get("board", {})
+            if board_dr.get("randomize_dimensions", False):
+                if "width_range" in board_dr:
+                    board_width = random.uniform(*board_dr["width_range"])
+                if "height_range" in board_dr:
+                    board_height = random.uniform(*board_dr["height_range"])
+                # Check for shape options
+                if "shape_options" in board_dr:
+                    shape = random.choice(board_dr["shape_options"])
+                    if shape == "square":
+                        # Make board square by using average of width and height
+                        avg_dim = (board_width + board_height) / 2
+                        board_width = board_height = avg_dim
+                logger.info(f"Randomized board dimensions: {board_width:.1f}mm x {board_height:.1f}mm")
+
         # Map production config format to POC parameters
         return cls(
-            scale=config["perlin"]["scale"],
-            octaves=config["perlin"]["octaves"],
-            persistence=config["perlin"]["persistence"],
-            lacunarity=config["perlin"]["lacunarity"],
+            scale=scale,
+            octaves=octaves,
+            persistence=persistence,
+            lacunarity=lacunarity,
             seed=config["perlin"]["seed"],
-            vignette_enabled=config["vignette"]["enabled"],
-            vignette_strength=config["vignette"]["strength"],
+            vignette_enabled=vignette_enabled,
+            vignette_strength=vignette_strength,
             # Use POC parameter names
-            large_count=config["components"].get("large", {}).get("count", 1),
-            medium_count=config["components"].get("medium", {}).get("count", 20),
-            small_med_count=config["components"].get("small", {}).get("count", 60) // 2,
-            small_count=config["components"].get("small", {}).get("count", 60) // 2,
+            large_count=large_count,
+            medium_count=medium_count,
+            small_med_count=small_count_total // 2,
+            small_count=small_count_total // 2,
             connector_count=config["components"].get("connectors", {}).get("count", 10),
             testpoint_count=config["components"].get("testpoints", {}).get("count", 15),
             large_spacing=config["components"].get("large", {}).get("spacing", 10.0),
             medium_spacing=config["components"].get("medium", {}).get("spacing", 5.0),
             small_med_spacing=config["components"].get("small", {}).get("spacing", 3.0),
             small_spacing=config["components"].get("small", {}).get("spacing", 2.5),
-            board_width=config["board"]["width"],
-            board_height=config["board"]["height"],
+            board_width=board_width,
+            board_height=board_height,
             grid_sizes=config.get("grid_sizes", [24.4, 14.6, 13.5, 3.6, 1.5]),
         )
 

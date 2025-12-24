@@ -6,9 +6,10 @@ Direct port from POC: src/bproc_renderer.py (working version)
 
 from pathlib import Path
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List, Dict, Optional
 import logging
 import sys
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class RenderConfig:
     render_samples: int = 128
     denoise: bool = True
     use_gpu: bool = True
+    domain_randomization: Optional[Dict] = None
 
     @classmethod
     def from_dict(cls, config: dict) -> "RenderConfig":
@@ -36,6 +38,7 @@ class RenderConfig:
             render_samples=config["render"].get("samples", 128),
             denoise=config["render"].get("denoise", True),
             use_gpu=config["render"].get("use_gpu", True),
+            domain_randomization=config.get("domain_randomization"),
         )
 
 
@@ -49,6 +52,115 @@ class BProcRenderer:
     def __init__(self, config: RenderConfig):
         """Initialize renderer."""
         self.config = config
+
+    def _apply_lighting_randomization(self, lighting_config: Dict) -> Dict:
+        """Apply domain randomization to lighting parameters."""
+        if not self.config.domain_randomization or not self.config.domain_randomization.get("enabled", False):
+            return lighting_config
+
+        dr_config = self.config.domain_randomization
+        lighting_dr = dr_config.get("lighting", {})
+
+        # Randomize sun energy
+        if "sun_energy_range" in lighting_dr:
+            min_energy, max_energy = lighting_dr["sun_energy_range"]
+            lighting_config["sun"]["energy"] = random.uniform(min_energy, max_energy)
+
+        # Randomize sun rotation
+        if "sun_rotation_range" in lighting_dr:
+            rotation_ranges = lighting_dr["sun_rotation_range"]
+            lighting_config["sun"]["rotation"] = [
+                random.uniform(rotation_ranges["x"][0], rotation_ranges["x"][1]),
+                random.uniform(rotation_ranges["y"][0], rotation_ranges["y"][1]),
+                random.uniform(rotation_ranges["z"][0], rotation_ranges["z"][1]),
+            ]
+
+        # Randomize fill light energy
+        if "fill_energy_range" in lighting_dr:
+            min_energy, max_energy = lighting_dr["fill_energy_range"]
+            for fill_light in lighting_config["fill_lights"]:
+                fill_light["energy"] = random.uniform(min_energy, max_energy)
+
+        return lighting_config
+
+    def _apply_camera_randomization(self, cameras: List[Dict]) -> List[Dict]:
+        """Apply domain randomization to camera parameters."""
+        if not self.config.domain_randomization or not self.config.domain_randomization.get("enabled", False):
+            return cameras
+
+        dr_config = self.config.domain_randomization
+        camera_dr = dr_config.get("camera", {})
+
+        randomized_cameras = []
+        for camera in cameras:
+            randomized_camera = camera.copy()
+
+            # Apply position offset
+            if "position_offset_range" in camera_dr:
+                offset_ranges = camera_dr["position_offset_range"]
+                randomized_camera["position"] = [
+                    camera["position"][0] + random.uniform(offset_ranges["x"][0], offset_ranges["x"][1]),
+                    camera["position"][1] + random.uniform(offset_ranges["y"][0], offset_ranges["y"][1]),
+                    camera["position"][2] + random.uniform(offset_ranges["z"][0], offset_ranges["z"][1]),
+                ]
+
+            # Apply rotation offset
+            if "rotation_offset_range" in camera_dr:
+                rotation_ranges = camera_dr["rotation_offset_range"]
+                randomized_camera["rotation"] = [
+                    camera["rotation"][0] + random.uniform(rotation_ranges["x"][0], rotation_ranges["x"][1]),
+                    camera["rotation"][1] + random.uniform(rotation_ranges["y"][0], rotation_ranges["y"][1]),
+                    camera["rotation"][2] + random.uniform(rotation_ranges["z"][0], rotation_ranges["z"][1]),
+                ]
+
+            randomized_cameras.append(randomized_camera)
+
+        return randomized_cameras
+
+    def _apply_background_randomization(self) -> List[float]:
+        """Apply domain randomization to background color."""
+        if not self.config.domain_randomization or not self.config.domain_randomization.get("enabled", False):
+            return self.config.background
+
+        dr_config = self.config.domain_randomization
+        background_dr = dr_config.get("background", {})
+
+        if background_dr.get("randomize_color", False) and "color_options" in background_dr:
+            return random.choice(background_dr["color_options"])
+
+        return self.config.background
+
+    def _apply_soldermask_randomization(self, bpy) -> Optional[Dict]:
+        """Apply domain randomization to soldermask color."""
+        if not self.config.domain_randomization or not self.config.domain_randomization.get("enabled", False):
+            return None
+
+        dr_config = self.config.domain_randomization
+        soldermask_dr = dr_config.get("soldermask", {})
+
+        if soldermask_dr.get("randomize_color", False) and "color_options" in soldermask_dr:
+            selected_color = random.choice(soldermask_dr["color_options"])
+
+            # Find and modify soldermask materials
+            for mat in bpy.data.materials:
+                mat_name_lower = mat.name.lower()
+                if "solder_mask" in mat_name_lower or "soldermask" in mat_name_lower:
+                    # Modify the material's base color
+                    if mat.use_nodes and mat.node_tree:
+                        for node in mat.node_tree.nodes:
+                            if node.type == 'BSDF_PRINCIPLED':
+                                # Set base color
+                                node.inputs['Base Color'].default_value = selected_color["rgb"] + [1.0]  # Add alpha
+                                # Set metallic and roughness if available
+                                if 'Metallic' in node.inputs:
+                                    node.inputs['Metallic'].default_value = selected_color.get("metallic", 0.1)
+                                if 'Roughness' in node.inputs:
+                                    node.inputs['Roughness'].default_value = selected_color.get("roughness", 0.4)
+
+            logger.info(f"Randomized soldermask color to: {selected_color['name']}")
+            return selected_color
+
+        return None
 
     def render(self, blend_path: Path, output_dir: Path) -> Path:
         """
@@ -209,29 +321,45 @@ class BProcRenderer:
         print(f"  Metal/Probable (cat 1):         {stats['metal_probable']}")
         print(f"  Non-metal/Non-probable (cat 2): {stats['non_metal']}\n")
 
-        # Set background
-        bproc.renderer.set_world_background(self.config.background)
+        # Apply domain randomization to soldermask color (before rendering)
+        soldermask_color = self._apply_soldermask_randomization(bpy)
 
-        # Setup lighting
-        sun_config = self.config.lighting["sun"]
+        # Apply domain randomization to background
+        background_color = self._apply_background_randomization()
+        bproc.renderer.set_world_background(background_color)
+        if self.config.domain_randomization and self.config.domain_randomization.get("enabled", False):
+            logger.info(f"Randomized background color to: {background_color}")
+
+        # Apply domain randomization to lighting
+        lighting_config = self._apply_lighting_randomization(self.config.lighting.copy())
+
+        # Setup lighting with randomized parameters
+        sun_config = lighting_config["sun"]
         sun_light = bproc.types.Light(light_type="SUN")
         sun_light.set_location(sun_config["location"])
         sun_light.set_rotation_euler(sun_config["rotation"])
         sun_light.set_energy(sun_config["energy"])
+        if self.config.domain_randomization and self.config.domain_randomization.get("enabled", False):
+            logger.info(f"Randomized sun: energy={sun_config['energy']:.2f}, rotation={sun_config['rotation']}")
 
-        # Create fill lights
-        for fill_config in self.config.lighting["fill_lights"]:
+        # Create fill lights with randomized energy
+        for i, fill_config in enumerate(lighting_config["fill_lights"]):
             fill_light = bproc.types.Light(light_type="POINT")
             fill_light.set_location(fill_config["location"])
             fill_light.set_energy(fill_config["energy"])
 
-        # Setup cameras from config
+        # Apply domain randomization to cameras
+        randomized_cameras = self._apply_camera_randomization(self.config.cameras)
+
+        # Setup cameras from config with randomization
         bproc.camera.set_resolution(self.config.resolution, self.config.resolution)
-        for camera in self.config.cameras:
+        for camera in randomized_cameras:
             position = camera["position"]
             rotation = camera["rotation"]
             matrix_world = bproc.math.build_transformation_mat(position, rotation)
             bproc.camera.add_camera_pose(matrix_world)
+            if self.config.domain_randomization and self.config.domain_randomization.get("enabled", False):
+                logger.info(f"Randomized camera: position={position}, rotation={rotation}")
 
         # Configure GPU rendering if enabled
         if self.config.use_gpu:

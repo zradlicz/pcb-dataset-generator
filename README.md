@@ -48,7 +48,7 @@ A proof-of-concept dataset of 689 samples was generated and used to train a U-Ne
 - Non-metal components: 85.81% accuracy
 - Mean IoU: 77.87%
 
-The main limitation is the **sim-to-real gap** - while the model performs excellently on synthetic data, it struggles on real-world PCB images due to lighting, texture, and style differences. Future work will focus on domain randomization, higher rendering resolution, and style transfer techniques to close this gap.
+The main limitation is the **sim-to-real gap** - while the model performs excellently on synthetic data, it struggles on real-world PCB images due to lighting, texture, and style differences. **Domain randomization has now been implemented** to address this gap by varying lighting, camera angles, soldermask colors, backgrounds, and placement parameters. See [`DOMAIN_RANDOMIZATION.md`](DOMAIN_RANDOMIZATION.md) for details. Future work will focus on higher rendering resolution, HDRI environments, and style transfer techniques to further close this gap.
 
 **For more details, see the full paper in [`report/pcb_segmentation_paper.pdf`](report/pcb_segmentation_paper.pdf).**
 
@@ -56,6 +56,7 @@ The main limitation is the **sim-to-real gap** - while the model performs excell
 
 ## Key Features
 
+- **Domain Randomization**: Comprehensive stochastic variation of rendering and placement parameters for improved model generalization (see [DOMAIN_RANDOMIZATION.md](DOMAIN_RANDOMIZATION.md))
 - **Organic Component Placement**: Perlin noise-based clustering for realistic layouts
 - **Automated PCB Generation**: KiCad Python API for programmatic board creation
 - **Photorealistic Rendering**: BlenderProc with physically-based materials

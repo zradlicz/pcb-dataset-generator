@@ -164,15 +164,41 @@ On real world images, the results can only be analyzed qualitatively. The result
 
 The results are expected for this type of system. Since the generation pipeline was not tuned at all for realism, this project was more of a proof of concept that a fully automated generated dataset could be used to train a machine learning model that has use in the real world. I think the concept of this is extremely promising even if the results were not great, as some tuning of the pipeline could drastically improve the results.
 
+\section{Domain Randomization Implementation}
+
+To address the sim-to-real gap identified in the initial results, comprehensive domain randomization has been implemented across both the rendering and placement pipelines. This randomization provides the variability needed to improve model generalization to real-world PCBs.
+
+\subsection{Rendering Domain Randomization}
+
+The rendering pipeline now supports stochastic variation of the following parameters for each generated sample:
+
+\textbf{Lighting Randomization:} Sun light intensity varies uniformly between 1.5-3.0 (previously fixed at 2.0), sun rotation varies across all three axes with ranges of $\pm$0.3 radians for pitch/yaw and 0-6.28 radians for full rotation around the vertical axis, and fill light intensities vary between 0.3-0.9 (previously fixed at 0.6). This simulates different times of day, lighting conditions, and workshop environments.
+
+\textbf{Camera Randomization:} Camera position offsets of $\pm$2cm in horizontal directions add perspective variation while maintaining top-down orientation. Camera rotation offsets of $\pm$0.1 radians ($\pm$5.7°) for pitch and roll, and $\pm$0.2 radians ($\pm$11.5°) for yaw simulate realistic camera mounting variations and hand-held capture scenarios.
+
+\textbf{Background Randomization:} Six background color options ranging from white (0.95, 0.95, 0.95) to dark surfaces (0.3, 0.3, 0.35) simulate different work surfaces including clean benches, wood desks, and dark mats.
+
+\textbf{Soldermask Color Randomization:} Seven common PCB soldermask colors (green, blue, red, black, white, yellow, and purple) are randomly selected with appropriate metallic and roughness properties. This addresses the unrealistic uniformity of the original dataset where all boards were green.
+
+\subsection{Placement Domain Randomization}
+
+The component placement pipeline now supports randomization of procedural generation parameters:
+
+\textbf{Perlin Noise Randomization:} Scale varies between 20.0-40.0 (affecting noise smoothness), octaves vary between 3-5 (detail levels), persistence varies between 0.4-0.6 (amplitude decay), and lacunarity varies between 1.8-2.2 (frequency increase). This creates diverse organic clustering patterns.
+
+\textbf{Component and Board Variation:} Vignette strength varies between 0.5-0.9 for edge density falloff, component counts vary by $\pm$20\% from baseline values, and board dimensions vary between 80-120mm with options for rectangular or square shapes.
+
+All randomization parameters are configurable via YAML files (render.yaml and placement.yaml) with a master enable/disable switch. When enabled, each generated sample receives a unique combination of parameters sampled from the specified ranges, creating a diverse dataset that better represents real-world variability.
+
 \section{Future Development and Improvements}
 
-There is a ton that can be improved on in this project. For starters I would tune the lighting and camera location to look more realistic. Time constraints prevented a proper analysis on how the lighting and camera settings could make renders more realistic looking. Higher resolution on the renders would also be extremely valuable for extremely small components which get washed out with low resolutions. Improvements to the generation through debugging would also help, particularly on the loss of data through image corruption that prevented all the images from being usable.
+While domain randomization has been implemented, additional improvements can further enhance the pipeline. Higher resolution renders (2048x2048 or higher) would provide better detail for extremely small components. Improvements to the generation stability would help address the 31\% sample loss rate from rendering failures and HDF5 corruption.
 
-The real limitation of this method is the sim-to-real gap that needs to be closed. I suspect that even with optimal parameter tuning on the camera and the lighting, it will still not compare to a real labelled dataset that could take thousands of hours to label. Future proposals include using state of the art vision language models (VLM) to translate image 'style' to that of a user's particular PCB and rerunning training. Another possibility is using a VLM to label a few user PCB images, and doing a fine tune on the existing model. I suspect low hanging fruit for improving this would also be stochastically varying each of the render parameters and PCB placement parameters for batches of renders, and combining all the batches with different parameters into one dataset to train on. This would provide the variability that you see in real PCBs in the field and in the world.
+The sim-to-real gap, while reduced through domain randomization, can be further addressed through advanced techniques. Future proposals include using state-of-the-art vision language models (VLMs) to translate image 'style' to match a user's particular PCB characteristics and camera setup. Another possibility is using a VLM for semi-supervised labeling of a small number of real user PCB images, then fine-tuning the existing model with this real-world data. Additional physical realism could be added through component aging effects, surface defects, dust, and reflections. HDRI environment maps could replace simple background colors to provide photorealistic lighting and reflections.
 
 \section{Conclusion}
 
-This work presents an automated pipeline for generating synthetic PCB datasets with pixel-level segmentation labels. The system successfully generates realistic PCB layouts using Perlin noise-based procedural generation and produces high-quality rendered images with corresponding segmentation masks. While the trained U-Net model achieves high accuracy on synthetic data (98.5\% overall pixel accuracy), the sim-to-real gap presents challenges for deployment on real-world PCBs. Future work will focus on improving photorealism through parameter tuning, incorporating domain randomization, and leveraging vision language models for style transfer and semi-supervised labeling. The open-source nature of this pipeline provides a foundation for the research community to develop more robust PCB analysis tools.
+This work presents an automated pipeline for generating synthetic PCB datasets with pixel-level segmentation labels. The system successfully generates realistic PCB layouts using Perlin noise-based procedural generation and produces high-quality rendered images with corresponding segmentation masks. Domain randomization has been implemented across both rendering and placement pipelines to address the sim-to-real gap, providing stochastic variation in lighting, camera angles, soldermask colors, background surfaces, and procedural generation parameters. While the trained U-Net model achieves high accuracy on synthetic data (98.5\% overall pixel accuracy), continued work on photorealism and semi-supervised learning with real-world data will further improve deployment performance. Future work will focus on leveraging vision language models for style transfer and semi-supervised labeling, and incorporating additional physical realism effects. The open-source nature of this pipeline, with comprehensive domain randomization capabilities, provides a foundation for the research community to develop more robust PCB analysis tools.
 
 \begin{thebibliography}{00}
 \bibitem{huang2015pcb} W. Huang and P. Wei, ``A PCB Dataset for Defects Detection and Classification,'' \textit{IEEE International Conference on Advanced Video and Signal Based Surveillance (AVSS)}, 2015. Available: https://ieeexplore.ieee.org/document/7153209
